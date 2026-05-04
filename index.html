@@ -758,17 +758,26 @@ document.getElementById('btn-pdf').addEventListener('click', () => {
   // Ocultar botões para não saírem na impressão
   actionButtons.style.display = 'none';
 
+  // Remover a borda do card temporariamente para o PDF ficar parecendo um documento limpo
+  const originalBorder = container.style.border;
+  container.style.border = 'none';
+
   const opt = {
-    margin:       10,
+    margin:       [15, 15, 15, 15], // Cria uma margem de 15mm (Top, Right, Bottom, Left)
     filename:     `Boletim_${provaAtiva.aluno.replace(/\s+/g, '_')}.pdf`,
     image:        { type: 'jpeg', quality: 0.98 },
-    html2canvas:  { scale: 2 },
-    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    html2canvas:  { 
+      scale: 2,
+      windowWidth: 800 // Força a renderização com largura de monitor, evitando espremer o conteúdo
+    },
+    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] } // Diz à biblioteca para respeitar o break-inside do CSS
   };
 
   html2pdf().set(opt).from(container).save().then(() => {
-    // Restaurar botões após gerar o PDF
+    // Restaurar botões e bordas após gerar o PDF
     actionButtons.style.display = 'flex';
+    container.style.border = originalBorder;
   });
 });
 

@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sistema de Gabarito</title>
+<!-- Bibliotecas -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f7fa;
+    --card: #ffffff;
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --success: #16a34a;
+    --danger: #dc2626;
+    --warn: #d97706;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+  header {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  header h1 { margin: 0; font-size: 20px; }
+  nav { display: flex; gap: 8px; }
+  nav button {
+    background: transparent;
+    border: 1px solid var(--border);
+    padding: 8px 16px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--text);
+    transition: all .15s;
+  }
+  nav button.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+  main {
+    max-width: 900px;
+    margin: 24px auto;
+    padding: 0 24px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 16px;
+  }
+  h2 { margin-top: 0; font-size: 18px; }
+  h3 { margin: 24px 0 12px; font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 6px; }
+  input[type=text], input[type=password], select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-family: inherit;
+    background: #fff;
+  }
+  input[type=text]:focus, input[type=password]:focus, select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, .1);
+  }
+  .row { margin-bottom: 16px; }
+  button.primary {
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  button.primary:hover { background: var(--primary-hover); }
+  button.primary:disabled { background: #94a3b8; cursor: not-allowed; }
+  button.secondary {
+    background: #fff;
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 10px 20px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  button.secondary:hover { background: #f3f4f6; }
+  button.danger {
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    padding: 6px 12px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 13px;
+  }
+  button.danger:hover { background: var(--danger); color: #fff; }
+  .file-input {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    background: #fafbfc;
+  }
+  .file-input input { flex: 1; }
+  .empty {
+    color: var(--muted);
+    font-style: italic;
+    text-align: center;
+    padding: 24px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  th, td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th { font-weight: 600; color: var(--muted); font-size: 13px; }
+  .question {
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+    background: #fafbfc;
+  }
+  .question-title {
+    font-weight: 600;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .question-weight {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: normal;
+  }
+  .options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .options label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: #fff;
+    cursor: pointer;
+    margin-bottom: 0;
+    font-weight: 500;
+    transition: all .15s;
+  }
+  .options label:hover { border-color: var(--primary); }
+  .options input[type=radio] { margin: 0; }
+  .options label.selected {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+  .result-banner {
+    padding: 24px;
+    border-radius: var(--radius);
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .result-banner.good { background: #dcfce7; color: #14532d; }
+  .result-banner.bad  { background: #fee2e2; color: #7f1d1d; }
+  .result-banner .score { font-size: 36px; font-weight: 700; margin: 8px 0; }
+  .review-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .review-item .right { color: var(--success); font-weight: 600; }
+  .review-item .wrong { color: var(--danger); font-weight: 600; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    background: #e0e7ff;
+    color: #3730a3;
+  }
+  .hint {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+  .hidden { display: none !important; }
+  .alert {
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+    font-size: 14px;
+  }
+  .alert.error { background: #fee2e2; color: #7f1d1d; border: 1px solid #fecaca; }
+  .alert.info { background: #dbeafe; color: #1e3a8a; border: 1px solid #bfdbfe; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  @media (max-width: 600px) {
+    header { flex-direction: column; gap: 12px; align-items: flex-start; }
+    main { padding: 0 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Sistema de Gabarito</h1>
+  <nav>
+    <button data-view="aluno" class="active">Aluno</button>
+    <button data-view="admin">Admin</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ============ ALUNO ============ -->
+  <section id="view-aluno">
+
+    <div id="aluno-step-start" class="card">
+      <h2>Realizar prova</h2>
+      <div class="row">
+        <label for="aluno-nome">Nome do aluno</label>
+        <input type="text" id="aluno-nome" placeholder="Digite seu nome completo" autocomplete="off" />
+      </div>
+      <div class="row">
+        <label for="aluno-prova">Prova</label>
+        <select id="aluno-prova">
+          <option value="">Selecione uma prova...</option>
+        </select>
+        <div class="hint" id="aluno-prova-hint"></div>
+      </div>
+      <button class="primary" id="btn-iniciar">Iniciar prova</button>
+    </div>
+
+    <div id="aluno-step-quiz" class="hidden">
+      <div class="card">
+        <h2 id="quiz-title"></h2>
+        <div class="hint" id="quiz-aluno-info"></div>
+      </div>
+      <div id="quiz-questions"></div>
+      <div class="card">
+        <button class="primary" id="btn-enviar">Enviar respostas</button>
+      </div>
+    </div>
+
+    <div id="aluno-step-result" class="hidden">
+      <div class="card" id="boletim-container">
+        <div class="result-banner" id="result-banner">
+          <div>Resultado de <strong id="result-name"></strong></div>
+          <div class="score"><span id="result-score"></span></div>
+          <div id="result-percent"></div>
+        </div>
+        <h3>Revisão</h3>
+        <div id="result-review"></div>
+        
+        <div class="actions" id="result-actions" style="margin-top: 24px;">
+          <button class="primary" id="btn-novo">Nova prova</button>
+          <button class="secondary" id="btn-pdf">Baixar Boletim (PDF)</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ADMIN ============ -->
+  <section id="view-admin" class="hidden">
+
+    <div class="card">
+      <h2>Importar gabarito (Excel)</h2>
+      <div class="alert info">
+        Estrutura esperada da planilha: coluna <strong>Questão</strong> e coluna <strong>Gabarito</strong>.<br>
+        Opcional: Adicione uma coluna chamada <strong>Peso</strong> para definir a pontuação de cada questão (padrão é 1).
+      </div>
+      <div class="row">
+        <label for="prova-titulo">Título da prova</label>
+        <input type="text" id="prova-titulo" placeholder="Ex: Avaliação de Automação" autocomplete="off" />
+      </div>
+      <div class="row">
+        <label>Arquivo Excel (.xlsx, .xls, .csv)</label>
+        <div class="file-input">
+          <input type="file" id="file-excel" accept=".xlsx,.xls,.csv" />
+        </div>
+      </div>
+      <div id="import-feedback"></div>
+      <button class="primary" id="btn-importar" disabled>Importar gabarito</button>
+    </div>
+
+    <div class="card">
+      <h2>Provas cadastradas</h2>
+      <div id="lista-provas"></div>
+    </div>
+
+    <div class="card">
+      <h2>Resultados dos alunos</h2>
+      <div class="row">
+        <label for="filtro-prova">Filtrar por prova</label>
+        <select id="filtro-prova">
+          <option value="">Todas as provas</option>
+        </select>
+      </div>
+      <div id="lista-resultados"></div>
+      <div class="actions" style="margin-top: 12px;">
+        <button class="primary" id="btn-export-csv">Exportar resultados (CSV)</button>
+        <button class="danger" id="btn-limpar-resultados">Limpar resultados</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+/* ===== Configurações ===== */
+const ADMIN_PASSWORD = "admin"; // Senha para acessar a aba Admin
+
+/* ===== Estado / armazenamento ===== */
+const STORE = {
+  getProvas: () => JSON.parse(localStorage.getItem('provas') || '[]'),
+  setProvas: (v) => localStorage.setItem('provas', JSON.stringify(v)),
+  getResultados: () => JSON.parse(localStorage.getItem('resultados') || '[]'),
+  setResultados: (v) => localStorage.setItem('resultados', JSON.stringify(v)),
+};
+
+let parsedGabarito = null;
+let provaAtiva = null;
+let respostasAtivas = {};
+
+/* ===== Navegação tabs ===== */
+document.querySelectorAll('nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const view = btn.dataset.view;
+    
+    // Verificação de senha para a aba Admin
+    if (view === 'admin') {
+      const pass = prompt("Digite a senha do administrador:");
+      if (pass !== ADMIN_PASSWORD) {
+        if (pass !== null) alert("Senha incorreta!");
+        return; // Cancela a mudança de aba
+      }
+    }
+
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    
+    document.getElementById('view-aluno').classList.toggle('hidden', view !== 'aluno');
+    document.getElementById('view-admin').classList.toggle('hidden', view !== 'admin');
+    
+    if (view === 'admin') renderAdmin();
+    if (view === 'aluno') renderAlunoSelect();
+  });
+});
+
+/* ===== Helpers ===== */
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function formatDate(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString('pt-BR');
+}
+
+/* ===== ADMIN: import Excel ===== */
+const fileInput = document.getElementById('file-excel');
+const tituloInput = document.getElementById('prova-titulo');
+const btnImportar = document.getElementById('btn-importar');
+const importFeedback = document.getElementById('import-feedback');
+
+function updateImportButton() {
+  btnImportar.disabled = !(parsedGabarito && parsedGabarito.length && tituloInput.value.trim());
+}
+tituloInput.addEventListener('input', updateImportButton);
+
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const data = new Uint8Array(ev.target.result);
+      const wb = XLSX.read(data, { type: 'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+      if (!rows.length) throw new Error('Planilha vazia.');
+
+      // Detecta colunas (flexível com acentos / case)
+      const sample = rows[0];
+      const keys = Object.keys(sample);
+      const keyQ = keys.find(k => /quest/i.test(k));
+      const keyG = keys.find(k => /gabar|resp/i.test(k));
+      const keyP = keys.find(k => /peso/i.test(k)); // Nova coluna Peso
+
+      if (!keyQ || !keyG) {
+        throw new Error('Não encontrei as colunas "Questão" e "Gabarito". Verifique os cabeçalhos.');
+      }
+
+      const gab = rows
+        .map(r => {
+          let peso = 1;
+          if (keyP && r[keyP] !== '') {
+             const parsedPeso = parseFloat(String(r[keyP]).replace(',', '.'));
+             if (!isNaN(parsedPeso)) peso = parsedPeso;
+          }
+          return {
+            q: parseInt(r[keyQ], 10),
+            resp: String(r[keyG]).trim().toUpperCase(),
+            peso: peso
+          };
+        })
+        .filter(r => Number.isFinite(r.q) && /^[A-E]$/.test(r.resp));
+
+      if (!gab.length) throw new Error('Nenhuma linha válida encontrada.');
+
+      // Ordena por número da questão
+      gab.sort((a, b) => a.q - b.q);
+      
+      const pontuacaoTotal = gab.reduce((acc, curr) => acc + curr.peso, 0);
+      parsedGabarito = gab;
+
+      importFeedback.innerHTML =
+        `<div class="alert info">Lidas <strong>${gab.length}</strong> questões com sucesso. Pontuação total: <strong>${pontuacaoTotal} pts</strong>.</div>`;
+      updateImportButton();
+    } catch (err) {
+      parsedGabarito = null;
+      importFeedback.innerHTML = `<div class="alert error">${escapeHtml(err.message)}</div>`;
+      updateImportButton();
+    }
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+btnImportar.addEventListener('click', () => {
+  const provas = STORE.getProvas();
+  const pontuacaoTotal = parsedGabarito.reduce((acc, curr) => acc + curr.peso, 0);
+  
+  provas.push({
+    id: uid(),
+    titulo: tituloInput.value.trim(),
+    criadaEm: new Date().toISOString(),
+    gabarito: parsedGabarito,
+    pontosTotal: pontuacaoTotal
+  });
+  STORE.setProvas(provas);
+  parsedGabarito = null;
+  tituloInput.value = '';
+  fileInput.value = '';
+  importFeedback.innerHTML = `<div class="alert info">Prova cadastrada com sucesso.</div>`;
+  updateImportButton();
+  renderAdmin();
+});
+
+/* ===== ADMIN: lista de provas ===== */
+function renderAdmin() {
+  const provas = STORE.getProvas();
+  const cont = document.getElementById('lista-provas');
+
+  if (!provas.length) {
+    cont.innerHTML = `<div class="empty">Nenhuma prova cadastrada ainda.</div>`;
+  } else {
+    cont.innerHTML = `
+      <table>
+        <thead><tr><th>Título</th><th>Questões</th><th>Pts Total</th><th>Criada em</th><th></th></tr></thead>
+        <tbody>
+        ${provas.map(p => {
+          const totalPts = p.pontosTotal || p.gabarito.length; // Fallback para provas antigas
+          return `
+          <tr>
+            <td>${escapeHtml(p.titulo)}</td>
+            <td><span class="badge">${p.gabarito.length}</span></td>
+            <td>${totalPts} pts</td>
+            <td>${formatDate(p.criadaEm)}</td>
+            <td><button class="danger" data-del="${p.id}">Excluir</button></td>
+          </tr>`
+        }).join('')}
+        </tbody>
+      </table>`;
+    cont.querySelectorAll('button[data-del]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (!confirm('Excluir esta prova? Os resultados associados serão mantidos.')) return;
+        STORE.setProvas(STORE.getProvas().filter(x => x.id !== btn.dataset.del));
+        renderAdmin();
+      });
+    });
+  }
+
+  // popular filtro
+  const filtro = document.getElementById('filtro-prova');
+  filtro.innerHTML = `<option value="">Todas as provas</option>` +
+    provas.map(p => `<option value="${p.id}">${escapeHtml(p.titulo)}</option>`).join('');
+
+  renderResultados();
+}
+
+/* ===== ADMIN: resultados ===== */
+document.getElementById('filtro-prova').addEventListener('change', renderResultados);
+
+function renderResultados() {
+  const filtroId = document.getElementById('filtro-prova').value;
+  const provas = STORE.getProvas();
+  let resultados = STORE.getResultados();
+  if (filtroId) resultados = resultados.filter(r => r.provaId === filtroId);
+  resultados.sort((a, b) => new Date(b.data) - new Date(a.data));
+
+  const cont = document.getElementById('lista-resultados');
+  if (!resultados.length) {
+    cont.innerHTML = `<div class="empty">Nenhum resultado registrado.</div>`;
+    return;
+  }
+  cont.innerHTML = `
+    <table>
+      <thead><tr><th>Aluno</th><th>Prova</th><th>Acertos</th><th>Pontos</th><th>%</th><th>Data</th></tr></thead>
+      <tbody>
+      ${resultados.map(r => {
+        const prova = provas.find(p => p.id === r.provaId);
+        const titulo = prova ? prova.titulo : '<em>(removida)</em>';
+        // Suporte para resultados antigos sem sistema de pesos
+        const ptsObtidos = r.pontos !== undefined ? r.pontos : r.acertos;
+        const ptsTotal = r.pontosTotal !== undefined ? r.pontosTotal : r.total;
+        
+        const pct = ((ptsObtidos / ptsTotal) * 100).toFixed(0);
+        return `<tr>
+          <td>${escapeHtml(r.aluno)}</td>
+          <td>${escapeHtml(titulo)}</td>
+          <td>${r.acertos} / ${r.total}</td>
+          <td><strong>${ptsObtidos}</strong> / ${ptsTotal}</td>
+          <td>${pct}%</td>
+          <td>${formatDate(r.data)}</td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table>`;
+}
+
+document.getElementById('btn-limpar-resultados').addEventListener('click', () => {
+  if (!confirm('Limpar TODOS os resultados? Esta ação é irreversível.')) return;
+  STORE.setResultados([]);
+  renderResultados();
+});
+
+document.getElementById('btn-export-csv').addEventListener('click', () => {
+  const provas = STORE.getProvas();
+  const resultados = STORE.getResultados();
+  if (!resultados.length) return alert('Sem resultados para exportar.');
+  const linhas = [['Aluno', 'Prova', 'Acertos', 'Total_Questoes', 'Pontos', 'Total_Pontos', 'Percentual', 'Data']];
+  resultados.forEach(r => {
+    const titulo = (provas.find(p => p.id === r.provaId) || {}).titulo || '(removida)';
+    const ptsObtidos = r.pontos !== undefined ? r.pontos : r.acertos;
+    const ptsTotal = r.pontosTotal !== undefined ? r.pontosTotal : r.total;
+    const pct = ((ptsObtidos / ptsTotal) * 100).toFixed(0) + '%';
+    
+    linhas.push([r.aluno, titulo, r.acertos, r.total, ptsObtidos, ptsTotal, pct, formatDate(r.data)]);
+  });
+  const csv = linhas.map(l => l.map(c => `"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `resultados-${Date.now()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+/* ===== ALUNO ===== */
+function renderAlunoSelect() {
+  const provas = STORE.getProvas();
+  const sel = document.getElementById('aluno-prova');
+  sel.innerHTML = `<option value="">Selecione uma prova...</option>` +
+    provas.map(p => `<option value="${p.id}">${escapeHtml(p.titulo)}</option>`).join('');
+  document.getElementById('aluno-prova-hint').textContent =
+    provas.length ? '' : 'Nenhuma prova disponível. Solicite ao professor.';
+  showAlunoStep('start');
+}
+
+function showAlunoStep(step) {
+  document.getElementById('aluno-step-start').classList.toggle('hidden', step !== 'start');
+  document.getElementById('aluno-step-quiz').classList.toggle('hidden', step !== 'quiz');
+  document.getElementById('aluno-step-result').classList.toggle('hidden', step !== 'result');
+}
+
+document.getElementById('btn-iniciar').addEventListener('click', () => {
+  const nome = document.getElementById('aluno-nome').value.trim();
+  const provaId = document.getElementById('aluno-prova').value;
+  if (!nome) return alert('Por favor, informe seu nome.');
+  if (!provaId) return alert('Selecione uma prova.');
+  const prova = STORE.getProvas().find(p => p.id === provaId);
+  if (!prova) return alert('Prova não encontrada.');
+  provaAtiva = { ...prova, aluno: nome };
+  respostasAtivas = {};
+  renderQuiz();
+  showAlunoStep('quiz');
+  window.scrollTo(0, 0);
+});
+
+function renderQuiz() {
+  document.getElementById('quiz-title').textContent = provaAtiva.titulo;
+  const ptsTotal = provaAtiva.pontosTotal || provaAtiva.gabarito.length;
+  document.getElementById('quiz-aluno-info').textContent =
+    `Aluno: ${provaAtiva.aluno} · ${provaAtiva.gabarito.length} questões · Valor total: ${ptsTotal} pts`;
+  
+  const cont = document.getElementById('quiz-questions');
+  cont.innerHTML = provaAtiva.gabarito.map(item => `
+    <div class="question">
+      <div class="question-title">
+        <span>Questão ${item.q}</span>
+        <span class="question-weight">Valor: ${item.peso || 1} pt(s)</span>
+      </div>
+      <div class="options" data-q="${item.q}">
+        ${['A','B','C','D','E'].map(letra => `
+          <label>
+            <input type="radio" name="q-${item.q}" value="${letra}" />
+            ${letra}
+          </label>`).join('')}
+      </div>
+    </div>`).join('');
+
+  cont.querySelectorAll('.options').forEach(div => {
+    div.addEventListener('change', (e) => {
+      const q = parseInt(div.dataset.q, 10);
+      respostasAtivas[q] = e.target.value;
+      div.querySelectorAll('label').forEach(l => l.classList.remove('selected'));
+      e.target.closest('label').classList.add('selected');
+    });
+  });
+}
+
+document.getElementById('btn-enviar').addEventListener('click', () => {
+  const total = provaAtiva.gabarito.length;
+  const respondidas = Object.keys(respostasAtivas).length;
+  if (respondidas < total) {
+    if (!confirm(`Você respondeu ${respondidas} de ${total} questões. Enviar mesmo assim?`)) return;
+  }
+
+  let acertos = 0;
+  let pontosObtidos = 0;
+  let pontosTotal = 0;
+
+  const detalhes = provaAtiva.gabarito.map(item => {
+    const peso = item.peso || 1;
+    pontosTotal += peso;
+    const dada = respostasAtivas[item.q] || '—';
+    const certo = dada === item.resp;
+    if (certo) {
+      acertos++;
+      pontosObtidos += peso;
+    }
+    return { q: item.q, dada, correta: item.resp, certo, peso };
+  });
+
+  // Salva resultado
+  const resultados = STORE.getResultados();
+  resultados.push({
+    provaId: provaAtiva.id,
+    aluno: provaAtiva.aluno,
+    acertos,
+    total,
+    pontos: pontosObtidos,
+    pontosTotal: pontosTotal,
+    data: new Date().toISOString(),
+    respostas: respostasAtivas
+  });
+  STORE.setResultados(resultados);
+
+  // Mostra resultado
+  const pct = (pontosObtidos / pontosTotal) * 100;
+  document.getElementById('result-name').textContent = provaAtiva.aluno;
+  document.getElementById('result-score').textContent = `${pontosObtidos} / ${pontosTotal} pts`;
+  document.getElementById('result-percent').textContent = `Desempenho: ${pct.toFixed(0)}% (${acertos} de ${total} acertos)`;
+  
+  const banner = document.getElementById('result-banner');
+  banner.className = 'result-banner ' + (pct >= 60 ? 'good' : 'bad');
+
+  document.getElementById('result-review').innerHTML = detalhes.map(d => `
+    <div class="review-item">
+      <span>Questão ${d.q} <span class="hint">(${d.peso} pt)</span></span>
+      <span class="${d.certo ? 'right' : 'wrong'}">
+        ${d.certo
+          ? `✓ ${d.dada} (+${d.peso})`
+          : `✗ Sua: ${d.dada} · Correta: ${d.correta} (+0)`}
+      </span>
+    </div>`).join('');
+
+  showAlunoStep('result');
+  window.scrollTo(0, 0);
+});
+
+document.getElementById('btn-novo').addEventListener('click', () => {
+  document.getElementById('aluno-nome').value = '';
+  document.getElementById('aluno-prova').value = '';
+  respostasAtivas = {};
+  provaAtiva = null;
+  renderAlunoSelect();
+});
+
+/* ===== GERAR PDF ===== */
+document.getElementById('btn-pdf').addEventListener('click', () => {
+  const container = document.getElementById('boletim-container');
+  const actionButtons = document.getElementById('result-actions');
+  
+  // Ocultar botões para não saírem na impressão
+  actionButtons.style.display = 'none';
+
+  const opt = {
+    margin:       10,
+    filename:     `Boletim_${provaAtiva.aluno.replace(/\s+/g, '_')}.pdf`,
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2 },
+    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+
+  html2pdf().set(opt).from(container).save().then(() => {
+    // Restaurar botões após gerar o PDF
+    actionButtons.style.display = 'flex';
+  });
+});
+
+/* ===== Init ===== */
+renderAlunoSelect();
+</script>
+
+</body>
+</html>

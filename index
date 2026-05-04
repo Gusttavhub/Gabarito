@@ -324,7 +324,7 @@
     </div>
 
     <div class="card">
-      <h2>Resultados dos alunos</h2>
+      <h2>Resultados dos alunos (Histórico Local)</h2>
       <div class="row">
         <label for="filtro-prova">Filtrar por prova</label>
         <select id="filtro-prova">
@@ -344,6 +344,9 @@
 <script>
 /* ===== Configurações ===== */
 const ADMIN_PASSWORD = "admin"; // Senha para acessar a aba Admin
+
+// Substitua abaixo pela URL do seu Web App do Google Apps Script gerada no Passo 2
+const URL_GOOGLE_SHEET = "COLE_AQUI_A_SUA_URL_DO_APPS_SCRIPT"; 
 
 /* ===== Estado / armazenamento ===== */
 const STORE = {
@@ -565,7 +568,7 @@ function renderResultados() {
 }
 
 document.getElementById('btn-limpar-resultados').addEventListener('click', () => {
-  if (!confirm('Limpar TODOS os resultados? Esta ação é irreversível.')) return;
+  if (!confirm('Limpar TODOS os resultados locais? (Isso não apagará os da sua Planilha do Google)')) return;
   STORE.setResultados([]);
   renderResultados();
 });
@@ -679,7 +682,7 @@ document.getElementById('btn-enviar').addEventListener('click', () => {
     return { q: item.q, dada, correta: item.resp, certo, peso };
   });
 
-  // Salva resultado
+  // Salva resultado local
   const resultados = STORE.getResultados();
   resultados.push({
     provaId: provaAtiva.id,
@@ -693,8 +696,31 @@ document.getElementById('btn-enviar').addEventListener('click', () => {
   });
   STORE.setResultados(resultados);
 
-  // Mostra resultado
+  // Calcula %
   const pct = (pontosObtidos / pontosTotal) * 100;
+
+  // ===== ENVIO PARA O GOOGLE SHEETS =====
+  if (typeof URL_GOOGLE_SHEET !== 'undefined' && URL_GOOGLE_SHEET.trim() !== "" && URL_GOOGLE_SHEET !== "COLE_AQUI_A_SUA_URL_DO_APPS_SCRIPT") {
+    fetch(URL_GOOGLE_SHEET, {
+      method: 'POST',
+      mode: 'no-cors', // Evita bloqueios de segurança do navegador (CORS) no modo estático
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        data: new Date().toLocaleString('pt-BR'),
+        aluno: provaAtiva.aluno,
+        prova: provaAtiva.titulo,
+        acertos: acertos,
+        pontos: pontosObtidos,
+        pontosTotal: pontosTotal,
+        percentual: pct.toFixed(0) + '%'
+      })
+    }).then(() => console.log('Notas enviadas para a planilha com sucesso.'))
+      .catch(err => console.error('Erro ao enviar para a planilha:', err));
+  }
+
+  // Mostra resultado na UI
   document.getElementById('result-name').textContent = provaAtiva.aluno;
   document.getElementById('result-score').textContent = `${pontosObtidos} / ${pontosTotal} pts`;
   document.getElementById('result-percent').textContent = `Desempenho: ${pct.toFixed(0)}% (${acertos} de ${total} acertos)`;

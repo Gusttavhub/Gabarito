@@ -202,6 +202,8 @@
     align-items: center;
     padding: 10px 14px;
     border-bottom: 1px solid var(--border);
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
   .review-item .right { color: var(--success); font-weight: 600; }
   .review-item .wrong { color: var(--danger); font-weight: 600; }
@@ -259,7 +261,7 @@
       <div class="row">
         <label for="aluno-prova">Prova</label>
         <select id="aluno-prova">
-          <option value="">Selecione uma prova...</option>
+          <option value="">Aguarde, carregando provas...</option>
         </select>
         <div class="hint" id="aluno-prova-hint"></div>
       </div>
@@ -343,10 +345,10 @@
 
 <script>
 /* ===== Configurações ===== */
-const ADMIN_PASSWORD = "admin246"; // Senha para acessar a aba Admin
+const ADMIN_PASSWORD = "admin"; // Senha para acessar a aba Admin
 
-// Substitua abaixo pela URL do seu Web App do Google Apps Script gerada no Passo 2
-const URL_GOOGLE_SHEET = "COLE_AQUI_A_SUA_URL_DO_APPS_SCRIPT"; 
+// Substitua abaixo pela URL do seu Web App do Google Apps Script
+const URL_GOOGLE_SHEET = "COLE_AQUI_A_SUA_URL_DO_APPS_SCRIPT_DE_NOVO"; 
 
 /* ===== Estado / armazenamento ===== */
 const STORE = {
@@ -359,6 +361,69 @@ const STORE = {
 let parsedGabarito = null;
 let provaAtiva = null;
 let respostasAtivas = {};
+
+/* ===== FUNÇÃO NOVA: Puxar Excel do GitHub ===== */
+async function carregarGabaritoDaNuvem() {
+  try {
+    // Tenta baixar um arquivo chamado "gabarito.xlsx" hospedado junto com o site
+    const response = await fetch('./gabarito.xlsx');
+    if (!response.ok) return; // Se não existir, segue a vida normal
+
+    const arrayBuffer = await response.arrayBuffer();
+    const data = new Uint8Array(arrayBuffer);
+    const wb = XLSX.read(data, { type: 'array' });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+    if (!rows.length) return;
+
+    const keys = Object.keys(rows[0]);
+    const keyQ = keys.find(k => /quest/i.test(k));
+    const keyG = keys.find(k => /gabar|resp/i.test(k));
+    const keyP = keys.find(k => /peso/i.test(k));
+
+    if (!keyQ || !keyG) return;
+
+    const gab = rows.map(r => {
+      let peso = 1;
+      if (keyP && r[keyP] !== '') {
+         const parsedPeso = parseFloat(String(r[keyP]).replace(',', '.'));
+         if (!isNaN(parsedPeso)) peso = parsedPeso;
+      }
+      return {
+        q: parseInt(r[keyQ], 10),
+        resp: String(r[keyG]).trim().toUpperCase(),
+        peso: peso
+      };
+    }).filter(r => Number.isFinite(r.q) && /^[A-E]$/.test(r.resp));
+
+    if (!gab.length) return;
+    gab.sort((a, b) => a.q - b.q);
+    const pontuacaoTotal = gab.reduce((acc, curr) => acc + curr.peso, 0);
+
+    const provas = STORE.getProvas();
+    const idNuvem = 'prova-automatica-github';
+    const provaExistenteIndex = provas.findIndex(p => p.id === idNuvem);
+
+    const novaProva = {
+      id: idNuvem,
+      titulo: 'Avaliação Oficial (Automática)',
+      criadaEm: new Date().toISOString(),
+      gabarito: gab,
+      pontosTotal: pontuacaoTotal
+    };
+
+    if (provaExistenteIndex >= 0) {
+      provas[provaExistenteIndex] = novaProva;
+    } else {
+      provas.push(novaProva);
+    }
+    STORE.setProvas(provas);
+    console.log("Prova da nuvem atualizada com sucesso!");
+  } catch (err) {
+    console.log("Modo nuvem inativo ou arquivo não encontrado.", err);
+  }
+}
 
 /* ===== Navegação tabs ===== */
 document.querySelectorAll('nav button').forEach(btn => {
@@ -419,19 +484,17 @@ fileInput.addEventListener('change', (e) => {
 
       if (!rows.length) throw new Error('Planilha vazia.');
 
-      // Detecta colunas (flexível com acentos / case)
       const sample = rows[0];
       const keys = Object.keys(sample);
       const keyQ = keys.find(k => /quest/i.test(k));
       const keyG = keys.find(k => /gabar|resp/i.test(k));
-      const keyP = keys.find(k => /peso/i.test(k)); // Nova coluna Peso
+      const keyP = keys.find(k => /peso/i.test(k));
 
       if (!keyQ || !keyG) {
         throw new Error('Não encontrei as colunas "Questão" e "Gabarito". Verifique os cabeçalhos.');
       }
 
-      const gab = rows
-        .map(r => {
+      const gab = rows.map(r => {
           let peso = 1;
           if (keyP && r[keyP] !== '') {
              const parsedPeso = parseFloat(String(r[keyP]).replace(',', '.'));
@@ -442,14 +505,11 @@ fileInput.addEventListener('change', (e) => {
             resp: String(r[keyG]).trim().toUpperCase(),
             peso: peso
           };
-        })
-        .filter(r => Number.isFinite(r.q) && /^[A-E]$/.test(r.resp));
+        }).filter(r => Number.isFinite(r.q) && /^[A-E]$/.test(r.resp));
 
       if (!gab.length) throw new Error('Nenhuma linha válida encontrada.');
 
-      // Ordena por número da questão
       gab.sort((a, b) => a.q - b.q);
-      
       const pontuacaoTotal = gab.reduce((acc, curr) => acc + curr.peso, 0);
       parsedGabarito = gab;
 
@@ -498,13 +558,13 @@ function renderAdmin() {
         <thead><tr><th>Título</th><th>Questões</th><th>Pts Total</th><th>Criada em</th><th></th></tr></thead>
         <tbody>
         ${provas.map(p => {
-          const totalPts = p.pontosTotal || p.gabarito.length; // Fallback para provas antigas
+          const totalPts = p.pontosTotal || p.gabarito.length;
           return `
           <tr>
             <td>${escapeHtml(p.titulo)}</td>
             <td><span class="badge">${p.gabarito.length}</span></td>
             <td>${totalPts} pts</td>
-            <td>${formatDate(p.criadaEm)}</td>
+            <td>${p.id === 'prova-automatica-github' ? '<strong>Via Nuvem</strong>' : formatDate(p.criadaEm)}</td>
             <td><button class="danger" data-del="${p.id}">Excluir</button></td>
           </tr>`
         }).join('')}
@@ -519,7 +579,6 @@ function renderAdmin() {
     });
   }
 
-  // popular filtro
   const filtro = document.getElementById('filtro-prova');
   filtro.innerHTML = `<option value="">Todas as provas</option>` +
     provas.map(p => `<option value="${p.id}">${escapeHtml(p.titulo)}</option>`).join('');
@@ -549,7 +608,6 @@ function renderResultados() {
       ${resultados.map(r => {
         const prova = provas.find(p => p.id === r.provaId);
         const titulo = prova ? prova.titulo : '<em>(removida)</em>';
-        // Suporte para resultados antigos sem sistema de pesos
         const ptsObtidos = r.pontos !== undefined ? r.pontos : r.acertos;
         const ptsTotal = r.pontosTotal !== undefined ? r.pontosTotal : r.total;
         
@@ -682,7 +740,6 @@ document.getElementById('btn-enviar').addEventListener('click', () => {
     return { q: item.q, dada, correta: item.resp, certo, peso };
   });
 
-  // Salva resultado local
   const resultados = STORE.getResultados();
   resultados.push({
     provaId: provaAtiva.id,
@@ -696,14 +753,13 @@ document.getElementById('btn-enviar').addEventListener('click', () => {
   });
   STORE.setResultados(resultados);
 
-  // Calcula %
   const pct = (pontosObtidos / pontosTotal) * 100;
 
   // ===== ENVIO PARA O GOOGLE SHEETS =====
-  if (typeof URL_GOOGLE_SHEET !== 'undefined' && URL_GOOGLE_SHEET.trim() !== "" && URL_GOOGLE_SHEET !== "COLE_AQUI_A_SUA_URL_DO_APPS_SCRIPT") {
+  if (typeof URL_GOOGLE_SHEET !== 'undefined' && URL_GOOGLE_SHEET.trim() !== "" && URL_GOOGLE_SHEET !== "COLE_AQUI_A_SUA_URL_DO_APPS_SCRIPT_DE_NOVO") {
     fetch(URL_GOOGLE_SHEET, {
       method: 'POST',
-      mode: 'no-cors', // Evita bloqueios de segurança do navegador (CORS) no modo estático
+      mode: 'no-cors',
       headers: {
         'Content-Type': 'application/json'
       },
@@ -720,7 +776,6 @@ document.getElementById('btn-enviar').addEventListener('click', () => {
       .catch(err => console.error('Erro ao enviar para a planilha:', err));
   }
 
-  // Mostra resultado na UI
   document.getElementById('result-name').textContent = provaAtiva.aluno;
   document.getElementById('result-score').textContent = `${pontosObtidos} / ${pontosTotal} pts`;
   document.getElementById('result-percent').textContent = `Desempenho: ${pct.toFixed(0)}% (${acertos} de ${total} acertos)`;
@@ -755,34 +810,32 @@ document.getElementById('btn-pdf').addEventListener('click', () => {
   const container = document.getElementById('boletim-container');
   const actionButtons = document.getElementById('result-actions');
   
-  // Ocultar botões para não saírem na impressão
   actionButtons.style.display = 'none';
-
-  // Remover a borda do card temporariamente para o PDF ficar parecendo um documento limpo
   const originalBorder = container.style.border;
   container.style.border = 'none';
 
   const opt = {
-    margin:       [15, 15, 15, 15], // Cria uma margem de 15mm (Top, Right, Bottom, Left)
+    margin:       [15, 15, 15, 15],
     filename:     `Boletim_${provaAtiva.aluno.replace(/\s+/g, '_')}.pdf`,
     image:        { type: 'jpeg', quality: 0.98 },
     html2canvas:  { 
       scale: 2,
-      windowWidth: 800 // Força a renderização com largura de monitor, evitando espremer o conteúdo
+      windowWidth: 800
     },
     jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-    pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] } // Diz à biblioteca para respeitar o break-inside do CSS
+    pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
   };
 
   html2pdf().set(opt).from(container).save().then(() => {
-    // Restaurar botões e bordas após gerar o PDF
     actionButtons.style.display = 'flex';
     container.style.border = originalBorder;
   });
 });
 
-/* ===== Init ===== */
-renderAlunoSelect();
+/* ===== Init (Puxa a nuvem e carrega as opções) ===== */
+carregarGabaritoDaNuvem().then(() => {
+  renderAlunoSelect();
+});
 </script>
 
 </body>
